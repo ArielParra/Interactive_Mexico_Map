@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Mexico Map</title>
+    <style>
+        *,
+        *:before,
+        *:after {
+            box-sizing: inherit;
+        }
+
+        body {
+            height: 100%;
+            background-color: #eceff4;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        #map-container {
+            position: relative;
+            max-width: 100%;
+            width: fit-content;
+            margin: 0 auto;
+            background-color: #d8dee9;
+            overflow: hidden;
+        }
+
+        #map-container object {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        #info-box {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #eceff4;
+            color: #2e3440;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px #3b4252;
+            display: none;
+        }
+
+        #info-box.hidden {
+            display: none;
+        }
+
+        #info-box:not(.hidden) {
+            display: block;
+        }
+
+        #tooltip {
+            position: fixed;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: #eceff4;
+            padding: 5px;
+            border-radius: 3px;
+            font-size: 16px;
+            pointer-events: none;
+            /* Prevent interfering mouse events */
+            display: none;
+        }
+
+        h1 {
+            margin: 0;
+            background-color: #81a1c1;
+
+            padding: .5rem;
+            text-align: center;
+        }
+
+        footer {
+            background-color: #81a1c1;
+            margin: 0;
+            padding: .5rem;
+            text-align: center;
+            position: relative;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Interactive Mexico Map</h1>
+    <div id="map-container">
+        <div id="info-box" class="hidden"></div>
+        <div id="tooltip"></div>
+        <object type="image/svg+xml" data="mexico-map.svg" id="mexico-map"></object>
+    </div>
+    <footer>
+        <p>Created with ❤️ by Ariel Parra</p>
+        <p>
+            <code>mexico-map.svg</code> by Allstrak, licensed under
+            <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer">CC BY-SA
+                3.0</a>.
+            Source: <a href="https://upload.wikimedia.org/wikipedia/commons/2/23/Mexico_Map.svg" target="_blank"
+                rel="noopener noreferrer">Wikimedia Commons</a>.
+        </p>
+    </footer>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const map = document.getElementById("mexico-map");
+            const infoBox = document.getElementById("info-box");
+            const tooltip = document.getElementById("tooltip");
+            const tooltipXoffset = 20; // Offset for tooltip position
+            const tooltipYoffset = -40;
+
+            // JSON
+            const stateData = {
+                "path7339": { name: "AGUASCALIENTES", data: "info" },
+                "path7285": { name: "BAJA CALIFORNIA", data: "info" },
+                "path7319": { name: "BAJA CALIFORNIA SUR", data: "info" },
+                "path7383": { name: "CAMPECHE", data: "info" },
+                "path7315": { name: "COAHUILA", data: "info" },
+                "path7375": { name: "COLIMA", data: "info" },
+                "path7397": { name: "CHIAPAS", data: "info" },
+                "path7297": { name: "CHIHUAHUA", data: "info" },
+                "path7369": { name: "CIUDAD DE MEXICO", data: "info" },
+                "path7327": { name: "DURANGO", data: "info" },
+                "path7361": { name: "GUANAJUATO", data: "info" },
+                "path7393": { name: "GUERRERO", data: "info" },
+                "path7365": { name: "HIDALGO", data: "info" },
+                "path7371": { name: "JALISCO", data: "info" },
+                "path7377": { name: "EDO. MEXICO", data: "info" },
+                "path7387": { name: "MICHOACAN", data: "info" },
+                "path7379": { name: "MORELOS", data: "info" },
+                "path7355": { name: "NAYARIT", data: "info" },
+                "path7321": { name: "NUEVO LEON", data: "info" },
+                "path7395": { name: "OAXACA", data: "info" },
+                "path7385": { name: "PUEBLA", data: "info" },
+                "path7359": { name: "QUERETARO", data: "info" },
+                "path7381": { name: "QUINTANA ROO", data: "info" },
+                "path7347": { name: "SAN LUIS POTOSI", data: "info" },
+                "path7325": { name: "SINALOA", data: "info" },
+                "path7289": { name: "SONORA", data: "info" },
+                "path7389": { name: "TABASCO", data: "info" },
+                "path7329": { name: "TAMAULIPAS", data: "info" },
+                "path7367": { name: "TLAXCALA", data: "info" },
+                "path7391": { name: "VERACRUZ", data: "info" },
+                "path7357": { name: "YUCATAN", data: "info" },
+                "path7349": { name: "ZACATECAS", data: "info" },
+            };
+            let selectedState = null;
+
+            map.addEventListener("load", () => {
+                const svgDoc = map.contentDocument;
+                const svgRoot = map.contentDocument.documentElement;
+                svgRoot.setAttribute("viewBox", "0 0 999.73236 679.94141");
+                svgRoot.setAttribute("preserveAspectRatio", "xMidYMid meet");
+                const tspans = svgDoc.querySelectorAll("tspan");
+                tspans.forEach((tspan) => {
+                    tspan.style.display = "none"; // Hide all <tspan>, eg. state numbers
+                });
+
+                const hoverColor = "#5e81ac";
+                const states = svgDoc.querySelectorAll("[id^='path']");
+
+                states.forEach((state) => {
+                    const originalColor = state.style.fill;
+
+                    state.addEventListener("mouseover", (e) => {
+                        if (state !== selectedState) {
+                            state.style.fill = hoverColor;
+                        }
+                        // Show the tooltip near the cursor
+                        const stateInfo = stateData[state.id];
+                        if (stateInfo) {
+                            tooltip.textContent = stateInfo.name;
+                            tooltip.style.display = "block";
+                        }
+                    });
+
+                    state.addEventListener("mousemove", (e) => {
+                        const containerRect = document.getElementById("map-container").getBoundingClientRect();
+                        // Calculate the position relative to the container
+                        const relativeX = e.clientX + containerRect.left;
+                        const relativeY = e.clientY + containerRect.top;
+                        tooltip.style.left = `${relativeX + tooltipXoffset}px`;
+                        tooltip.style.top = `${relativeY + tooltipYoffset}px`; 
+                    });
+                    state.addEventListener("mouseout", () => {
+                        if (state !== selectedState) {
+                            state.style.fill = originalColor;
+                        }
+                        tooltip.style.display = "none";
+                        if (selectedState) {
+                            const selectedStateInfo = stateData[selectedState.id];
+                            if (selectedStateInfo) {
+                                infoBox.innerHTML = `
+                            <strong>Name:</strong> ${selectedStateInfo.name}<br>
+                            <strong>data:</strong> ${selectedStateInfo.data}<br>
+                        `;
+                                infoBox.classList.add("clicked");
+                            }
+                        } else {
+                            infoBox.classList.add("hidden");
+                        }
+                    });
+
+                    state.addEventListener("click", () => {
+                        if (selectedState) {
+                            selectedState.style.fill = originalColor;
+                        }
+
+                        selectedState = state;
+                        state.style.fill = hoverColor;
+
+                        const stateInfo = stateData[state.id];
+                        if (stateInfo) {
+                            infoBox.innerHTML = `
+                        <strong>Name:</strong> ${stateInfo.name}<br>
+                        <strong>data:</strong> ${stateInfo.data}<br>
+                    `;
+                        } else {
+                            // infoBox.innerHTML = `
+                            //     <strong>State ID:</strong> ${state.id}<br>
+                            //     <strong>Data:</strong> Not available<br>
+                            // `;
+                        }
+                        infoBox.classList.add("clicked");
+                        infoBox.classList.remove("hidden");
+                    });
+                });
+
+                document.addEventListener("click", (e) => {
+                    const mapContainer = document.getElementById("map-container");
+                    if (!mapContainer.contains(e.target)) {
+                        infoBox.classList.add("hidden");
+                        infoBox.classList.remove("clicked");
+
+                        if (selectedState) {
+                            selectedState.style.fill = originalColor;
+                            selectedState = null;
+                        }
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>
